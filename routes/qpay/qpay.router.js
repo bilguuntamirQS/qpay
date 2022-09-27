@@ -5,6 +5,6 @@ const qpayRouter = Router()
 
 qpayRouter.get('/token', getToken)
 qpayRouter.post('/invoice', createInvoice)
-qpayRouter.get('/:id', checkInvoice)
+qpayRouter.get('/invoice/:id', checkInvoice)
 
 export default qpayRouter

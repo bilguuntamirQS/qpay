@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { sendPaid } from '../../server.js'
+import axios from 'axios'
 
 const prisma = new PrismaClient()
 
@@ -61,7 +62,7 @@ export const createInvoice = async (req, res) => {
     }
   })
   return res.status(200).json({
-    invoice_id: invoice.id,
+    id: invoice.id,
     ...response.data
   })
 }
@@ -75,7 +76,7 @@ export const checkInvoice = async (req, res) => {
     }
   })
 
-  const data = {
+  const invoiceData = {
     object_type: 'INVOICE',
     object_id: invoice.id.toString(),
     offset: {
@@ -84,7 +85,7 @@ export const checkInvoice = async (req, res) => {
     }
   }
 
-  const response = await axios.post('https://merchant.qpay.mn/v2/payment/check', data, {
+  const {data} = await axios.post('https://merchant.qpay.mn/v2/payment/check', invoiceData, {
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer ' + token.access_token,
@@ -92,9 +93,9 @@ export const checkInvoice = async (req, res) => {
       'User-Agent': 'insomnia/2021.2.2',
       Cookie: 'qpay_merchant_service.sid=s%3AFVUMTAKoN-wEhO9x5qM_3FRXTMgP41Q4.6kjdtk6%2FrN%2Bot6iQBuVOk6jG8KwyH3q2BhhFNBh1OkQ; _4d45d=http://10.233.76.223:3000'
     }
-  }).then(res => res.data).catch(err => console.log(err))
+  })
 
-  if (response.paid_amount) {
+  if (data.paid_amount) {
     await prisma.invoice.update({
       where: { id: invoice.id },
       data: {
@@ -105,6 +106,6 @@ export const checkInvoice = async (req, res) => {
     sendPaid(true)
   }
 
-  return res.status(200).json(response)
+  return res.status(200).json(data)
 }
 
