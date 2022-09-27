@@ -1,13 +1,9 @@
-import express from 'express'
 import { PrismaClient } from '@prisma/client'
-import axios from 'axios'
+import { sendPaid } from '../../server.js'
 
-const app = express()
 const prisma = new PrismaClient()
 
-app.use(express.json())
-
-app.get('/token', async (req, res) => {
+export const getToken = async (req, res) => {
   try {
     const { data } = await axios.post('https://merchant.qpay.mn/v2/auth/token', {}, {
       headers: {
@@ -33,9 +29,9 @@ app.get('/token', async (req, res) => {
   } catch (error) {
     res.status(400).json(error)
   }
-})
+}
 
-app.post('/invoice', async (req, res) => {
+export const createInvoice = async (req, res) => {
   const invoice = await prisma.invoice.create({
     data: {
       amount: parseInt(req.body.amount)
@@ -68,9 +64,9 @@ app.post('/invoice', async (req, res) => {
     invoice_id: invoice.id,
     ...response.data
   })
-})
+}
 
-app.get('/qpay/:id', async (req, res) => {
+export const checkInvoice = async (req, res) => {
   const { id } = req.params
   const token = await prisma.token.findFirst()
   const invoice = await prisma.invoice.findUnique({
@@ -105,11 +101,10 @@ app.get('/qpay/:id', async (req, res) => {
         verified: true
       }
     })
+
+    sendPaid(true)
   }
 
   return res.status(200).json(response)
-})
+}
 
-app.listen(3000, () => {
-  console.log('server started')
-})
