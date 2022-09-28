@@ -17,85 +17,92 @@ const header = {
 };
 
 export const createInvoice = async(req, res) => {
-  if(req.body.amount == null) {
-    return res.status(400).json('amount is null')
-  }
-  const invoice = await prisma.invoice.create({
-    data: {
-      amount: parseFloat(req.body.amount.toFixed(2)),
-      phone: req.body.phone
+  try {
+    if(req.body.amount == null) {
+      return res.status(400).json('amount is null')
     }
-  });
-  if (invoice) {
-    try {
-      const data = {
-        amount: invoice.amount.toString(),
-        callback: "http://vulcan.mn",
-        transactionId: invoice.id.toString() + "asfd",
-        genToken: "N",
-        returnType: "POST"
-      };
-      const hash = HmacSHA256(
-        data.transactionId + data.amount + data.returnType + data.callback,
-        hashKey
-      ).toString(crypto.enc.Hex);
-
-      const request = await axios.post(
-        "https://ecommerce.golomtbank.com/api/invoice",
-        { ...data, checksum: hash },
-        {
-          headers: header
-        }
-      );
-
-      if (
-        request.data.checksum ===
-        HmacSHA256(
-          request.data.invoice + request.data.transactionId,
+    const invoice = await prisma.invoice.create({
+      data: {
+        amount: parseFloat(req.body.amount.toFixed(2)),
+        phone: req.body.phone
+      }
+    });
+    if (invoice) {
+      try {
+        const data = {
+          amount: invoice.amount.toString(),
+          callback: "http://vulcan.mn",
+          transactionId: invoice.id.toString() + "asfd",
+          genToken: "N",
+          returnType: "POST"
+        };
+        const hash = HmacSHA256(
+          data.transactionId + data.amount + data.returnType + data.callback,
           hashKey
-        ).toString(crypto.enc.Hex)
-      ) {
-        return res.status(200).json({
-          ...request.data,
-          redirect_url: `https://ecommerce.golomtbank.com/payment/mn/${request.data.invoice}`,
-          id: invoice.id
-        });
-      } else {
+        ).toString(crypto.enc.Hex);
+
+        const request = await axios.post(
+          "https://ecommerce.golomtbank.com/api/invoice",
+          { ...data, checksum: hash },
+          {
+            headers: header
+          }
+        );
+
+        if (
+          request.data.checksum ===
+          HmacSHA256(
+            request.data.invoice + request.data.transactionId,
+            hashKey
+          ).toString(crypto.enc.Hex)
+        ) {
+          return res.status(200).json({
+            id: invoice.id,
+            ...request.data,
+            redirect_url: `https://ecommerce.golomtbank.com/payment/mn/${request.data.invoice}`
+          });
+        } else {
+          return res.status(400).json("error");
+        }
+      } catch (e) {
         return res.status(400).json("error");
       }
-    } catch (e) {
-      console.log(e);
+    } else {
       return res.status(400).json("error");
     }
-  } else {
-    return res.status(400).json("error");
+  } catch (error) {
+    return res.status(400).json(error)
   }
 }
 
 export const checkInvoice = async (req, res) => {
-  const { id } = req.params;
-  const hash = HmacSHA256(id + id, hashKey).toString(crypto.enc.Hex);
+  try {
+    const { id } = req.params;
+    const hash = HmacSHA256(id + id, hashKey).toString(crypto.enc.Hex);
 
-  const {data} = await axios.post('https://ecommerce.golomtbank.com/api/inquiry', 
-    {
-      checksum: hash,
-      transactionId: id
-    }, {
-      headers: header
-    })
+    const {data} = await axios.post('https://ecommerce.golomtbank.com/api/inquiry', 
+      {
+        checksum: hash,
+        transactionId: id
+      }, {
+        headers: header
+      })
 
-  if(data.errorDesc == 'Амжилттай') {
-    await prisma.invoice.update({
-      where: {
-        id: parseInt(id)
-      },
-      data: {
-        verified: true
-      }
-    })
+    if(data.errorDesc == 'Амжилттай') {
+      await prisma.invoice.update({
+        where: {
+          id: parseInt(id)
+        },
+        data: {
+          verified: true
+        }
+      })
 
-    sendPaid(true)
+      sendPaid(true)
+    }
+
+    return res.status(200).json(data)
+  } catch(error) {
+    return res.status(400).json(error)
   }
-
-  return res.status(200).json(data);
 }

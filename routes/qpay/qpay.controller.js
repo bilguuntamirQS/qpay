@@ -26,86 +26,94 @@ export const getToken = async (req, res) => {
         refresh_token: data.refresh_token
       }
     })
-    res.status(200).json(token)
+    res.status(200).json(data)
   } catch (error) {
     res.status(400).json(error)
   }
 }
 
 export const createInvoice = async (req, res) => {
-  const invoice = await prisma.invoice.create({
-    data: {
-      amount: parseInt(req.body.amount)
+  try {
+    const invoice = await prisma.invoice.create({
+      data: {
+        amount: parseInt(req.body.amount)
+      }
+    })
+    const token = await prisma.token.findUnique({
+      where: { id: 1 }
+    })
+    if (!invoice) {
+      res.status(400).json('hadgalj chadsangui')
     }
-  })
-  const token = await prisma.token.findUnique({
-    where: { id: 1 }
-  })
-  if (!invoice) {
-    res.status(400).json('hadgalj chadsangui')
-  }
-  const data = {
-    invoice_code: 'TAPPAY_INVOICE',
-    sender_invoice_no: invoice.id.toString(),
-    invoice_receiver_code: 'terminal',
-    invoice_description: 'hello',
-    amount: req.body.amount,
-    callback_url: 'http://vulcan.mn/qpay/' + invoice.id
-  }
-  const response = await axios.post('https://merchant.qpay.mn/v2/invoice', data, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + token.access_token,
-      Host: 'merchant.qpay.mn',
-      'User-Agent': 'insomnia/2021.2.2',
-      Cookie: 'qpay_merchant_service.sid=s%3AFVUMTAKoN-wEhO9x5qM_3FRXTMgP41Q4.6kjdtk6%2FrN%2Bot6iQBuVOk6jG8KwyH3q2BhhFNBh1OkQ; _4d45d=http://10.233.76.223:3000'
+    const data = {
+      invoice_code: 'TAPPAY_INVOICE',
+      sender_invoice_no: invoice.id.toString(),
+      invoice_receiver_code: 'terminal',
+      invoice_description: 'hello',
+      amount: req.body.amount,
+      callback_url: 'http://vulcan.mn/qpay/' + invoice.id
     }
-  })
-  return res.status(200).json({
-    id: invoice.id,
-    ...response.data
-  })
+    const response = await axios.post('https://merchant.qpay.mn/v2/invoice', data, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token.access_token,
+        Host: 'merchant.qpay.mn',
+        'User-Agent': 'insomnia/2021.2.2',
+        Cookie: 'qpay_merchant_service.sid=s%3AFVUMTAKoN-wEhO9x5qM_3FRXTMgP41Q4.6kjdtk6%2FrN%2Bot6iQBuVOk6jG8KwyH3q2BhhFNBh1OkQ; _4d45d=http://10.233.76.223:3000'
+      }
+    })
+    res.status(200).json({
+      id: invoice.id,
+      ...response.data
+    })
+  } catch (error) {
+    res.status(400).json(error)
+  }
 }
 
 export const checkInvoice = async (req, res) => {
-  const { id } = req.params
-  const token = await prisma.token.findFirst()
-  const invoice = await prisma.invoice.findUnique({
-    where: {
-      id: parseInt(id)
-    }
-  })
-
-  const invoiceData = {
-    object_type: 'INVOICE',
-    object_id: invoice.id.toString(),
-    offset: {
-      page_number: 1,
-      page_limit: 100
-    }
-  }
-
-  const {data} = await axios.post('https://merchant.qpay.mn/v2/payment/check', invoiceData, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + token.access_token,
-      Host: 'merchant.qpay.mn',
-      'User-Agent': 'insomnia/2021.2.2',
-      Cookie: 'qpay_merchant_service.sid=s%3AFVUMTAKoN-wEhO9x5qM_3FRXTMgP41Q4.6kjdtk6%2FrN%2Bot6iQBuVOk6jG8KwyH3q2BhhFNBh1OkQ; _4d45d=http://10.233.76.223:3000'
-    }
-  })
-
-  if (data.paid_amount) {
-    await prisma.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        verified: true
+  try {
+    const { id } = req.params
+    const token = await prisma.token.findFirst()
+    const invoice = await prisma.invoice.findUnique({
+      where: {
+        id: parseInt(id)
       }
     })
 
-    sendPaid(true)
-  }
+    const invoiceData = {
+      object_type: 'INVOICE',
+      object_id: invoice.id.toString(),
+      offset: {
+        page_number: 1,
+        page_limit: 100
+      }
+    }
 
-  return res.status(200).json(data)
+    const { data } = await axios.post('https://merchant.qpay.mn/v2/payment/check', invoiceData, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token.access_token,
+        Host: 'merchant.qpay.mn',
+        'User-Agent': 'insomnia/2021.2.2',
+        Cookie: 'qpay_merchant_service.sid=s%3AFVUMTAKoN-wEhO9x5qM_3FRXTMgP41Q4.6kjdtk6%2FrN%2Bot6iQBuVOk6jG8KwyH3q2BhhFNBh1OkQ; _4d45d=http://10.233.76.223:3000'
+      }
+    })
+
+    if (data.paid_amount) {
+      await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          verified: true
+        }
+      })
+
+      sendPaid(true)
+    }
+
+    res.status(200).json(data)
+  } catch(error) {
+    res.status(400).json(error)
+  }
 }
 
